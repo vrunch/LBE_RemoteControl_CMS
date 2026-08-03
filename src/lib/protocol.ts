@@ -19,6 +19,8 @@ export const COMMANDS = {
   start: { code: "LAUNCH_APP", label: "앱 실행", tone: "positive" },
   reset: { code: "RESET_GAME", label: "게임 초기화", tone: "warning" },
   quit: { code: "QUIT_APP", label: "앱 종료", tone: "danger" },
+  /** 배터리 등 상태 즉시 보고 요청. COMMAND_KEYS 에 넣지 않아 일괄 제어 버튼에는 노출되지 않는다. */
+  status: { code: "GET_STATUS", label: "상태 갱신", tone: "info" },
 } as const satisfies Record<string, { code: string; label: string; tone: CommandTone }>;
 
 export type CommandKey = keyof typeof COMMANDS;
@@ -103,6 +105,9 @@ export function validateName(raw: unknown): NameCheck {
 // ------------------------------------------------------------
 export type DeviceStatus = "online" | "offline";
 
+/** Unity 쪽 CurrentChargingState() 가 보내는 값과 일치 */
+export type ChargingState = "charging" | "discharging" | "not_charging" | "full" | "unknown";
+
 export type DeviceView = {
   /** 하드웨어 고유값 (소켓 관리 키) */
   uid: string;
@@ -127,6 +132,13 @@ export type DeviceView = {
   lastAckAt: number | null;
   /** ping/pong 왕복 지연 (ms) */
   latencyMs: number | null;
+
+  /** 배터리 잔량 % (0~100). 기기가 STATUS 를 보고한 적 없으면 null */
+  battery: number | null;
+  /** 충전 상태. 기기가 보고한 적 없으면 null */
+  batteryCharging: ChargingState | null;
+  /** 마지막 STATUS 보고 시각 (epoch ms) */
+  batteryAt: number | null;
 };
 
 export type ServerSnapshot = {

@@ -12,6 +12,7 @@ import {
   sanitizeName,
   unnamedFor,
   validateName,
+  type ChargingState,
   type CommandKey,
   type CommandResult,
   type DeviceView,
@@ -53,6 +54,10 @@ type Connection = {
   lastAck: string | null;
   lastAckAt: number | null;
   latencyMs: number | null;
+  /** 배터리 잔량 % (STATUS 보고 기반, 없으면 null) */
+  battery: number | null;
+  batteryCharging: ChargingState | null;
+  batteryAt: number | null;
 };
 
 type SocketMeta = {
@@ -283,6 +288,13 @@ class LbeHub {
         this.handleAck(socket, meta, data);
         break;
 
+      // --- 기기의 상태(배터리) 보고 ---
+      // 기기가 배터리 '변화 시'와 주기(기본 60초) 안전망으로만 보내므로 부하가 거의 없다.
+      // 로그를 남기지 않고 스냅샷만 갱신해 로그 창이 도배되는 것을 막는다. (저전력 경고는 예외)
+      case "STATUS":
+        this.handleStatus(socket, meta, data);
+        break;
+
       // --- 애플리케이션 레벨 핑 ---
       case "PING":
         safeSend(socket, { type: "PONG" });
@@ -383,6 +395,9 @@ class LbeHub {
       lastAck: previous?.lastAck ?? null,
       lastAckAt: previous?.lastAckAt ?? null,
       latencyMs: null,
+      battery: previous?.battery ?? null,
+      batteryCharging: previous?.batteryCharging ?? null,
+      batteryAt: previous?.batteryAt ?? null,
     });
 
     this.pushLog(
@@ -419,6 +434,46 @@ class LbeHub {
       `${uid ? this.describe(uid) : `IP: ${meta.ip}`} ${command} -> ${status}`,
       uid,
     );
+    this.scheduleSnapshot();
+  }
+
+  /**
+   * 기기의 상태(배터리) 보고 패킷.
+   * { type: "STATUS", uid, battery: 0~100(-1 은 미확인), charging: "charging"|... }
+   */
+  private handleStatus(socket: WebSocket, meta: SocketMeta, data: Record<string, unknown>) {
+    const uid = meta.uid ?? (sanitizeName(data.uid) || null);
+    if (!uid) return;
+
+    const connection = this.connections.get(uid);
+    if (!connection || connection.socket !== socket) return;
+
+    const now = Date.now();
+
+    const rawBattery = Number(data.battery);
+    const battery =
+      Number.isFinite(rawBattery) && rawBattery >= 0
+        ? Math.min(100, Math.max(0, Math.round(rawBattery)))
+        : null;
+
+    const CHARGING_STATES: ChargingState[] = ["charging", "discharging", "not_charging", "full", "unknown"];
+    const charging = CHARGING_STATES.includes(data.charging as ChargingState)
+      ? (data.charging as ChargingState)
+      : null;
+
+    // 20% 이하로 '떨어지는 순간'에만 경고 로그 1회 (도배 방지)
+    const LOW_BATTERY = 20;
+    const wasLow = connection.battery !== null && connection.battery <= LOW_BATTERY;
+    const isLow = battery !== null && battery <= LOW_BATTERY && charging !== "charging";
+    if (isLow && !wasLow) {
+      this.pushLog("warn", "배터리 부족", `${this.describe(uid)} 배터리가 ${battery}% 입니다. 충전이 필요합니다.`, uid);
+    }
+
+    connection.battery = battery;
+    connection.batteryCharging = charging;
+    connection.batteryAt = now;
+    connection.lastSeenAt = now;
+
     this.scheduleSnapshot();
   }
 
@@ -632,6 +687,9 @@ class LbeHub {
         lastAck: connection.lastAck,
         lastAckAt: connection.lastAckAt,
         latencyMs: connection.latencyMs,
+        battery: connection.battery,
+        batteryCharging: connection.batteryCharging,
+        batteryAt: connection.batteryAt,
       } satisfies DeviceView;
     });
 
