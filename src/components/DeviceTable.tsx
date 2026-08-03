@@ -15,7 +15,7 @@ import {
 import { useLbe, useNow } from "@/components/LbeProvider";
 import { RenameDialog } from "@/components/RenameDialog";
 import { Badge, Button, EmptyState, Panel, PanelHeader, StatusDot } from "@/components/ui";
-import { formatDuration, formatRelative, latencyTone } from "@/lib/format";
+import { batteryTone, formatDuration, formatRelative, latencyTone } from "@/lib/format";
 import { COMMANDS, commandLabelByCode, uidSuffix, type CommandKey, type DeviceView } from "@/lib/protocol";
 
 const ROW_ACTIONS = [
@@ -175,7 +175,7 @@ export function DeviceTable() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] border-collapse text-left">
+            <table className="w-full min-w-[1060px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-base-800 text-[11px] font-medium tracking-wide text-base-500">
                   <th className="w-10 py-2.5 pl-5">
@@ -189,6 +189,7 @@ export function DeviceTable() {
                   <th className="py-2.5 pr-3 font-medium">기기</th>
                   <th className="py-2.5 pr-3 font-medium">상태</th>
                   <th className="py-2.5 pr-3 font-medium">모델</th>
+                  <th className="py-2.5 pr-3 font-medium">배터리</th>
                   <th className="py-2.5 pr-3 font-medium">지연</th>
                   <th className="py-2.5 pr-3 font-medium">최근 명령</th>
                   <th className="py-2.5 pr-3 font-medium">최근 응답</th>
@@ -279,6 +280,7 @@ function DeviceRow({
 }) {
   const online = device.status === "online";
   const tone = latencyTone(device.latencyMs);
+  const batTone = batteryTone(device.battery);
   const ackOk = device.lastAck ? device.lastAck.toUpperCase() === "OK" : null;
 
   return (
@@ -339,6 +341,38 @@ function DeviceRow({
 
       <td className="py-3 pr-3">
         <span className="text-[12px] text-base-400">{device.model ?? "-"}</span>
+      </td>
+
+      {/* 배터리: 기기의 STATUS 보고(변화 이벤트 + 주기 안전망) 기반.
+          새로고침 버튼은 GET_STATUS 명령으로 즉시 1회 보고를 요청한다. */}
+      <td className="tabular py-3 pr-3">
+        <span className="inline-flex items-center gap-1">
+          {device.battery === null ? (
+            <span className="text-[12px] text-base-500">{online ? "보고 대기" : "-"}</span>
+          ) : (
+            <span
+              className={`text-[12px] font-medium ${
+                batTone === "ok" ? "text-ok" : batTone === "warn" ? "text-warn" : "text-danger"
+              }`}
+              title={
+                device.batteryAt ? `마지막 보고: ${formatRelative(device.batteryAt, now)}` : undefined
+              }
+            >
+              {device.battery}%{device.batteryCharging === "charging" ? " ⚡" : ""}
+            </span>
+          )}
+          {online ? (
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onCommand("status")}
+              title={`${device.name} 배터리 상태 갱신`}
+              className="focus-ring grid size-5 shrink-0 place-items-center rounded text-base-500 transition-colors hover:bg-base-800 hover:text-base-100 disabled:pointer-events-none disabled:opacity-35"
+            >
+              <IconRefresh className="size-3" />
+            </button>
+          ) : null}
+        </span>
       </td>
 
       <td className="tabular py-3 pr-3">

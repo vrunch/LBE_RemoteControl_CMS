@@ -171,5 +171,9 @@ export function toOfflineView(entry: RegistryEntry): DeviceView {
     lastAck: null,
     lastAckAt: null,
     latencyMs: null,
+    // 배터리는 접속 중에만 의미 있는 실시간 값이라 오프라인에서는 표시하지 않는다.
+    battery: null,
+    batteryCharging: null,
+    batteryAt: null,
   };
 }

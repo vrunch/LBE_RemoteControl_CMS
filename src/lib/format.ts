@@ -56,3 +56,11 @@ export function latencyTone(ms: number | null): "ok" | "warn" | "danger" | "mute
   if (ms < 250) return "warn";
   return "danger";
 }
+
+/** 배터리 잔량에 따른 표시 색상 */
+export function batteryTone(percent: number | null): "ok" | "warn" | "danger" | "muted" {
+  if (percent === null) return "muted";
+  if (percent <= 20) return "danger";
+  if (percent <= 40) return "warn";
+  return "ok";
+}
