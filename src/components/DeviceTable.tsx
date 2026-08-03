@@ -14,6 +14,7 @@ import {
 } from "@/components/icons";
 import { useLbe, useNow } from "@/components/LbeProvider";
 import { RenameDialog } from "@/components/RenameDialog";
+import { TeamStartDialog } from "@/components/TeamStartDialog";
 import { Badge, Button, EmptyState, Panel, PanelHeader, StatusDot } from "@/components/ui";
 import { batteryTone, formatDuration, formatRelative, latencyTone } from "@/lib/format";
 import { COMMANDS, commandLabelByCode, uidSuffix, type CommandKey, type DeviceView } from "@/lib/protocol";
@@ -86,6 +87,8 @@ export function DeviceTable() {
   const [confirm, setConfirm] = useState<{ command: CommandKey; targets: string[] } | null>(null);
   const [renaming, setRenaming] = useState<DeviceView | null>(null);
   const [forgetting, setForgetting] = useState<DeviceView | null>(null);
+  /** 팀 세션 시작(QR 대체) 창 열림 여부. 열 때마다 마운트해 입력 상태를 새로 시작한다. */
+  const [teamDialogOpen, setTeamDialogOpen] = useState(false);
 
   // 선택은 uid 로 들고 있는다. 이름은 언제든 바뀔 수 있기 때문.
   // 목록에서 사라진 기기와 오프라인 기기는 렌더 시점에 걸러낸다.
@@ -145,25 +148,39 @@ export function DeviceTable() {
               : "등록된 기기가 없습니다"
           }
           right={
-            selected.size > 0 ? (
-              <div className="flex items-center gap-1.5">
-                <span className="mr-1 hidden text-[11px] text-base-500 sm:inline">
-                  선택 {selected.size}대에
-                </span>
-                {ROW_ACTIONS.map(({ key, Icon, variant }) => (
-                  <Button
-                    key={key}
-                    size="sm"
-                    variant={variant}
-                    disabled={sending || !connected}
-                    onClick={() => runSelected(key, selectedNames)}
-                  >
-                    <Icon className="size-3.5" />
-                    {COMMANDS[key].label}
-                  </Button>
-                ))}
-              </div>
-            ) : null
+            <div className="flex flex-wrap items-center gap-1.5">
+              {selected.size > 0 ? (
+                <>
+                  <span className="mr-1 hidden text-[11px] text-base-500 sm:inline">
+                    선택 {selected.size}대에
+                  </span>
+                  {ROW_ACTIONS.map(({ key, Icon, variant }) => (
+                    <Button
+                      key={key}
+                      size="sm"
+                      variant={variant}
+                      disabled={sending || !connected}
+                      onClick={() => runSelected(key, selectedNames)}
+                    >
+                      <Icon className="size-3.5" />
+                      {COMMANDS[key].label}
+                    </Button>
+                  ))}
+                  <span className="mx-0.5 h-4 w-px bg-base-800" />
+                </>
+              ) : null}
+              {/* 팀 세션 시작 (QR 스캔 대체): 팀 ID/인원수 입력 + 대상 기기 선택 팝업 */}
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={sending || !connected || onlineDevices.length === 0}
+                title="선택한 기기들에 팀 ID/인원수를 보내 게임 접속을 시작합니다 (QR 스캔 대체)"
+                onClick={() => setTeamDialogOpen(true)}
+              >
+                <IconPlay className="size-3.5" />
+                팀 세션 시작
+              </Button>
+            </div>
           }
         />
 
@@ -218,6 +235,14 @@ export function DeviceTable() {
       </Panel>
 
       <RenameDialog device={renaming} onClose={() => setRenaming(null)} />
+
+      {teamDialogOpen ? (
+        <TeamStartDialog
+          devices={onlineDevices}
+          initialSelected={[...selected]}
+          onClose={() => setTeamDialogOpen(false)}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={confirm !== null}
