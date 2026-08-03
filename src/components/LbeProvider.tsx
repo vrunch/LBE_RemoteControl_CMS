@@ -22,6 +22,7 @@ import {
   type RenameResult,
   type ServerSnapshot,
   type StreamMessage,
+  type TeamStartResult,
 } from "@/lib/protocol";
 
 // ============================================================
@@ -46,6 +47,8 @@ type LbeContextValue = {
   sending: boolean;
   /** targets 는 표시이름 배열 또는 "all" */
   sendCommand: (command: CommandKey, targets: string[] | "all") => Promise<CommandResult | null>;
+  /** 팀 세션 시작 (기존 QR 스캔 대체). targets 는 표시이름/uid 배열 또는 "all" */
+  startTeam: (teamId: number, teamCount: number, targets: string[] | "all") => Promise<TeamStartResult | null>;
   /** target 은 현재 표시이름 또는 uid */
   renameDevice: (target: string, name: string) => Promise<RenameResult>;
   forgetDevice: (target: string) => Promise<ForgetResult>;
@@ -232,6 +235,50 @@ export function LbeProvider({ children }: { children: ReactNode }) {
     [pushToast],
   );
 
+  // ---------- 팀 세션 시작 (QR 스캔 대체) ----------
+  const startTeam = useCallback(
+    async (teamId: number, teamCount: number, targets: string[] | "all"): Promise<TeamStartResult | null> => {
+      setSending(true);
+      try {
+        const response = await fetch("/api/team", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ teamId, teamCount, targets }),
+        });
+
+        const result = (await response.json()) as TeamStartResult & { error?: string };
+
+        if (!response.ok || !result.ok) {
+          pushToast({
+            tone: result.sent?.length ? "warn" : "danger",
+            title: "팀 세션 시작 전송 실패",
+            desc:
+              result.error ??
+              (result.failed?.length ? `실패: ${result.failed.join(", ")}` : "요청을 처리하지 못했습니다."),
+          });
+        } else {
+          pushToast({
+            tone: "ok",
+            title: `${result.label} 전송 완료`,
+            desc: `${result.sent.join(", ")} · 이미 세션 중인 기기는 FAIL 로 응답합니다.`,
+          });
+        }
+
+        return result;
+      } catch {
+        pushToast({
+          tone: "danger",
+          title: "서버에 연결할 수 없습니다",
+          desc: "Next 서버가 실행 중인지 확인하세요.",
+        });
+        return null;
+      } finally {
+        setSending(false);
+      }
+    },
+    [pushToast],
+  );
+
   // ---------- 이름 변경 ----------
   const renameDevice = useCallback(
     async (target: string, name: string): Promise<RenameResult> => {
@@ -298,6 +345,7 @@ export function LbeProvider({ children }: { children: ReactNode }) {
       logs,
       sending,
       sendCommand,
+      startTeam,
       renameDevice,
       forgetDevice,
       clearLogs,
@@ -310,6 +358,7 @@ export function LbeProvider({ children }: { children: ReactNode }) {
       logs,
       sending,
       sendCommand,
+      startTeam,
       renameDevice,
       forgetDevice,
       clearLogs,

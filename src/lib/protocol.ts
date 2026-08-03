@@ -34,6 +34,20 @@ export const COMMAND_KEYS = ["identify", "start", "reset", "quit"] as const sati
  */
 export const SET_NAME_CODE = "SET_NAME";
 
+/**
+ * 원격 팀 세션 시작 명령 (기존 QR 스캔 대체).
+ * teamId / teamCount 파라미터가 필요해 단순 명령 모음(COMMANDS)과 별도로 다루며,
+ * 전용 API(/api/team)와 TeamStartDialog 를 통해서만 전송한다.
+ * Unity 쪽 VRRemoteClient.Commands.StartTeam 과 반드시 일치해야 한다.
+ */
+export const START_TEAM_CODE = "START_TEAM";
+
+/** 팀 ID / 인원수 허용 범위 (Unity ConnectionManager 설정과 맞춘 보수적 상한) */
+export const TEAM_ID_MIN = 1;
+export const TEAM_ID_MAX = 999;
+export const TEAM_COUNT_MIN = 1;
+export const TEAM_COUNT_MAX = 30;
+
 export function isCommandKey(value: unknown): value is CommandKey {
   return typeof value === "string" && Object.prototype.hasOwnProperty.call(COMMANDS, value);
 }
@@ -42,6 +56,7 @@ export function isCommandKey(value: unknown): value is CommandKey {
 export function commandLabelByCode(code: string | null | undefined): string | null {
   if (!code) return null;
   if (code === SET_NAME_CODE) return "이름 변경";
+  if (code === START_TEAM_CODE) return "팀 세션 시작";
   const found = Object.values(COMMANDS).find((c) => c.code === code);
   return found ? found.label : code;
 }
@@ -206,6 +221,22 @@ export type CommandResult = {
   /** 전송에 성공한 기기 표시이름 */
   sent: string[];
   /** 오프라인이거나 이름을 찾지 못한 대상 */
+  failed: string[];
+  error?: string;
+};
+
+/** 팀 세션 시작 요청. targets 는 표시이름/uid 배열이거나 "all". */
+export type TeamStartRequest = {
+  teamId: number;
+  teamCount: number;
+  targets: string[] | "all";
+};
+
+export type TeamStartResult = {
+  ok: boolean;
+  /** 예: "팀 세션 시작 (팀 3 · 4명)" */
+  label: string;
+  sent: string[];
   failed: string[];
   error?: string;
 };

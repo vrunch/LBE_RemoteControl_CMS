@@ -7,6 +7,7 @@ import {
   COMMANDS,
   LOG_LIMIT,
   SET_NAME_CODE,
+  START_TEAM_CODE,
   isUnnamed,
   uidSuffix,
   sanitizeName,
@@ -22,6 +23,7 @@ import {
   type RenameResult,
   type ServerSnapshot,
   type StreamMessage,
+  type TeamStartResult,
 } from "@/lib/protocol";
 import {
   loadRegistry,
@@ -585,19 +587,72 @@ class LbeHub {
     };
   }
 
-  /** uid 로 실제 소켓에 명령을 밀어넣는다. */
-  private dispatch(uid: string, code: string, deviceId?: string): boolean {
+  /** uid 로 실제 소켓에 명령을 밀어넣는다. extra 는 명령에 동봉할 추가 필드(deviceId, teamId 등). */
+  private dispatch(uid: string, code: string, extra?: Record<string, unknown>): boolean {
     const connection = this.connections.get(uid);
     if (!connection) return false;
 
-    const payload: Record<string, unknown> = { type: "COMMAND", command: code };
-    if (deviceId !== undefined) payload.deviceId = deviceId;
+    const payload: Record<string, unknown> = { type: "COMMAND", command: code, ...extra };
 
     if (!safeSend(connection.socket, payload)) return false;
 
     connection.lastCommand = code;
     connection.lastCommandAt = Date.now();
     return true;
+  }
+
+  /**
+   * 선택 기기들에 팀 세션 시작(teamId/인원수) 명령을 보낸다. (기존 QR 스캔 대체)
+   * targets 는 표시이름/uid 배열 또는 "all". 파라미터 검증은 API 라우트에서 마친 상태다.
+   * 기기(Unity)는 이미 세션 진행 중이면 FAIL ACK 로 거절한다 (RESET_GAME 후 재시도).
+   */
+  startTeam(teamId: number, teamCount: number, targets: string[] | "all"): TeamStartResult {
+    const label = `팀 세션 시작 (팀 ${teamId} · ${teamCount}명)`;
+    const extra = { teamId, teamCount };
+
+    const sent: string[] = [];
+    const failed: string[] = [];
+
+    if (targets === "all") {
+      for (const connection of this.connections.values()) {
+        const name = this.nameOf(connection.uid);
+        if (this.dispatch(connection.uid, START_TEAM_CODE, extra)) sent.push(name);
+        else failed.push(name);
+      }
+      this.pushLog("command", "전송 완료", `접속된 총 ${sent.length}대의 기기에 '${label}' 명령을 보냈습니다.`);
+    } else {
+      for (const target of targets) {
+        const entry = this.resolve(target);
+        if (!entry) {
+          failed.push(target);
+          this.pushLog("error", "전송 실패", `매핑 테이블에 없는 기기입니다: ${target}`);
+          continue;
+        }
+
+        if (this.dispatch(entry.uid, START_TEAM_CODE, extra)) {
+          sent.push(entry.name);
+          this.pushLog("command", "전송 완료", `${this.describe(entry.uid)} 에 '${label}' 명령을 보냈습니다.`, entry.uid);
+        } else {
+          failed.push(entry.name);
+          this.pushLog("error", "전송 실패", `${this.describe(entry.uid)} 은(는) 오프라인 상태입니다.`, entry.uid);
+        }
+      }
+    }
+
+    this.scheduleSnapshot();
+
+    return {
+      ok: failed.length === 0 && sent.length > 0,
+      label,
+      sent,
+      failed,
+      error:
+        sent.length === 0
+          ? targets === "all"
+            ? "접속된 기기가 없습니다."
+            : "대상 기기가 오프라인이거나 목록에 없습니다."
+          : undefined,
+    };
   }
 
   // ----------------------------------------------------------
@@ -629,7 +684,7 @@ class LbeHub {
     this.persist();
 
     // 접속 중이면 기기에도 알려 로컬 캐시를 갱신하게 한다.
-    const notified = this.dispatch(entry.uid, SET_NAME_CODE, nextName);
+    const notified = this.dispatch(entry.uid, SET_NAME_CODE, { deviceId: nextName });
 
     this.pushLog(
       "command",
@@ -784,10 +839,25 @@ const UNKNOWN_PREFIX = "UNKNOWN_";
 const globalRef = globalThis as typeof globalThis & { __LBE_HUB__?: LbeHub };
 
 export function getHub(): LbeHub {
-  if (!globalRef.__LBE_HUB__) {
+  const existing = globalRef.__LBE_HUB__;
+
+  if (!existing) {
     globalRef.__LBE_HUB__ = new LbeHub();
+    return globalRef.__LBE_HUB__;
   }
-  return globalRef.__LBE_HUB__;
+
+  // 개발 중 HMR 로 hub.ts 가 다시 평가되면, 서버 기동 때 만들어진 기존 인스턴스는
+  // '옛 클래스'의 프로토타입을 물고 있어 이후에 추가된 메서드(startTeam 등)가 없다.
+  // ("getHub().startTeam is not a function" 이 바로 이 경우)
+  // 소켓/상태는 유지해야 하므로 인스턴스를 새로 만들지 않고,
+  // 프로토타입만 최신 클래스로 갈아끼워 자가 복구한다.
+  const stale = Object.getOwnPropertyNames(LbeHub.prototype).some((name) => !(name in existing));
+  if (stale) {
+    Object.setPrototypeOf(existing, LbeHub.prototype);
+    console.log("[LBE Hub] HMR 이후 구버전 인스턴스를 감지해 최신 코드로 갱신했습니다.");
+  }
+
+  return existing;
 }
 
 export type { LbeHub };
