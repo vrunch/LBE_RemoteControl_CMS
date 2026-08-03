@@ -23,3 +23,6 @@ yarn-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# privacy
+devices.json
