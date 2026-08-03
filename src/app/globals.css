@@ -1,0 +1,137 @@
+@import "tailwindcss";
+
+/* ============================================================
+   다크 CMS 테마 토큰
+   ============================================================ */
+@theme {
+  --font-sans: "Pretendard Variable", Pretendard, "Segoe UI", "Malgun Gothic",
+    "Apple SD Gothic Neo", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", ui-monospace, SFMono-Regular,
+    Menlo, Consolas, monospace;
+
+  /* 표면 / 경계 */
+  --color-base-950: #0a0b0e;
+  --color-base-900: #0f1115;
+  --color-base-880: #12151a;
+  --color-base-850: #161a20;
+  --color-base-800: #1c212a;
+  --color-base-750: #232935;
+  --color-base-700: #2c3340;
+
+  /* 텍스트 */
+  --color-base-500: #5a6474;
+  --color-base-400: #798394;
+  --color-base-300: #98a2b3;
+  --color-base-200: #c4cbd6;
+  --color-base-100: #e7ebf2;
+
+  /* 강조색 */
+  --color-accent: #5b8cff;
+  --color-accent-dim: #3a5cb8;
+  --color-ok: #34d399;
+  --color-warn: #f5b544;
+  --color-danger: #f87171;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-base-950);
+    color: var(--color-base-100);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-accent) 40%, transparent);
+  }
+
+  /* 숫자가 표에서 흔들리지 않도록 */
+  table,
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ============================================================
+   스크롤바
+   ============================================================ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-base-700) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-base-750);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-base-700);
+  background-clip: content-box;
+}
+
+/* ============================================================
+   애니메이션
+   ============================================================ */
+@keyframes lbe-breathe {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.82);
+  }
+}
+
+.animate-breathe {
+  animation: lbe-breathe 2s ease-in-out infinite;
+}
+
+@keyframes lbe-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: lbe-fade-in 0.18s ease-out;
+}
+
+/* 포커스 링 통일 */
+@layer utilities {
+  .focus-ring {
+    outline: none;
+  }
+  .focus-ring:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}

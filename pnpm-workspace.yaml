@@ -1,0 +1,7 @@
+# pnpm 11 부터 설정은 package.json 이 아니라 이 파일에서 읽는다.
+# 설치 시 빌드 스크립트 실행을 허용할 패키지 목록.
+#   sharp         - Next.js 이미지 최적화용 네이티브 모듈
+#   unrs-resolver - eslint-config-next 의 import 경로 해석기
+allowBuilds:
+  sharp: true
+  unrs-resolver: true
